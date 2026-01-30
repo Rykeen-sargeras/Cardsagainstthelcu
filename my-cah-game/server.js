@@ -11,6 +11,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static('public'));
 
+// Load Cards
 let whiteCards = fs.readFileSync('white_cards.txt', 'utf-8').split('\n').filter(l => l.trim() !== "");
 let blackCards = fs.readFileSync('black_cards.txt', 'utf-8').split('\n').filter(l => l.trim() !== "");
 
@@ -30,8 +31,9 @@ io.on('connection', (socket) => {
             isCzar: false
         };
 
-        // Check if we can start
         const playerCount = Object.keys(players).length;
+        
+        // Start game if 3 players join
         if (!gameStarted && playerCount >= 3) {
             gameStarted = true;
             startNewRound();
@@ -44,15 +46,21 @@ io.on('connection', (socket) => {
         const p = players[socket.id];
         if (!p || p.isCzar || !gameStarted) return;
 
+        // Ensure they don't play more than once per round
+        const alreadyPlayed = submissions.find(s => s.playerId === socket.id);
+        if (alreadyPlayed) return;
+
         submissions.push({ card: cardText, playerId: socket.id, username: p.username });
         p.hand = p.hand.filter(c => c !== cardText);
+        
+        // Refill hand immediately
         p.hand.push(drawCard(whiteCards));
 
         updateAll();
     });
 
     socket.on('pick-winner', (playerId) => {
-        if (players[socket.id]?.isCzar) {
+        if (players[socket.id]?.isCzar && submissions.length > 0) {
             if (players[playerId]) players[playerId].score++;
             czarIndex++;
             startNewRound();
@@ -69,13 +77,14 @@ io.on('connection', (socket) => {
             gameStarted = false;
             io.emit('force-reload');
         } else {
-            socket.emit('error-msg', "Wrong password.");
+            socket.emit('error-msg', "Access Denied: Incorrect Password.");
         }
     });
 
     socket.on('disconnect', () => {
         delete players[socket.id];
-        if (Object.keys(players).length < 3) {
+        const playerCount = Object.keys(players).length;
+        if (playerCount < 3) {
             gameStarted = false;
         } else if (gameStarted) {
             startNewRound();
@@ -93,7 +102,7 @@ function startNewRound() {
     const ids = Object.keys(players);
     if (ids.length < 3) return;
 
-    // Deal cards if they don't have them
+    // Ensure every player has exactly 10 cards
     ids.forEach(id => {
         while (players[id].hand.length < 10) {
             players[id].hand.push(drawCard(whiteCards));
@@ -115,4 +124,4 @@ function updateAll() {
     });
 }
 
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server live on port ${PORT}`));
