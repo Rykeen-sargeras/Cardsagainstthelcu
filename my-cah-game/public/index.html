@@ -1,143 +1,108 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Friends Against Humanity</title>
+    <title>XYZZY Clone</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { 
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
-            background-color: #1a1a1a; 
-            color: white; 
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .container { width: 90%; max-width: 1000px; padding: 20px; text-align: center; }
-
-        /* Card Layout */
-        .card-display { 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            margin-bottom: 40px; 
-        }
-
-        .card {
-            width: 220px;
-            height: 310px;
-            background-size: 100% 100%;
-            padding: 25px;
-            box-sizing: border-box;
-            border-radius: 15px;
-            text-align: left;
-            font-weight: bold;
-            font-size: 1.2rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            line-height: 1.3;
-        }
-
-        .black-card {
-            background-image: url('blackcard.png');
-            color: white;
-        }
-
-        .white-card {
-            background-image: url('whitecard.png');
-            color: black;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .white-card:hover { transform: translateY(-10px); }
-
-        .hand {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #111; color: white; text-align: center; margin: 0; padding: 20px; }
+        .card { width: 180px; height: 250px; padding: 20px; border-radius: 12px; background-size: 100% 100%; display: inline-block; margin: 10px; vertical-align: top; text-align: left; font-weight: bold; color: black; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+        .black-card { background-image: url('blkcard.png'); color: white; cursor: default; }
+        .white-card { background-image: url('whitecard.png'); }
+        .czar-note { color: #00ff00; font-weight: bold; font-size: 1.2em; text-transform: uppercase; }
+        .score-board { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.9); padding: 15px; border: 1px solid #444; border-radius: 8px; text-align: left; min-width: 150px; z-index: 100; }
+        .reset-btn { background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-top: 10px; width: 100%; }
         #lobby { margin-top: 100px; }
-        input { padding: 10px; border-radius: 5px; border: none; font-size: 1rem; }
-        button { 
-            padding: 10px 20px; 
-            background: white; 
-            color: black; 
-            border: none; 
-            border-radius: 5px; 
-            font-weight: bold; 
-            cursor: pointer;
-        }
+        input { padding: 10px; border-radius: 5px; border: none; }
+        button.join-btn { padding: 10px 20px; background: white; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
+    <div id="lobby">
+        <h1>Friends Against Humanity</h1>
+        <input type="text" id="username" placeholder="Nickname">
+        <button class="join-btn" onclick="join()">Join Game</button>
+    </div>
 
-    <div class="container">
-        <div id="lobby">
-            <h1>Friends Against Humanity</h1>
-            <input type="text" id="username" placeholder="Enter your nickname...">
-            <button onclick="joinGame()">Join Game</button>
+    <div id="game" style="display:none">
+        <div class="score-board">
+            <div id="scores"></div>
+            <button class="reset-btn" onclick="adminReset()">RESET GAME</button>
+        </div>
+        
+        <h2>Current Black Card</h2>
+        <div id="black-card-container"></div>
+
+        <div id="czar-controls" style="display:none">
+            <p class="czar-note">★ YOU ARE THE CARD CZAR ★</p>
+            <p>Wait for players to submit, then click a card to pick the winner!</p>
         </div>
 
-        <div id="game-table" style="display:none;">
-            <div class="card-display">
-                <h3>The Black Card</h3>
-                <div id="black-card-text" class="card black-card">
-                    Waiting for Czar...
-                </div>
-            </div>
+        <hr style="border: 0.5px solid #333; margin: 20px 0;">
+        <h3>The Table (Submissions)</h3>
+        <div id="table"></div>
 
-            <hr style="width:100%; border: 0.5px solid #444;">
-
-            <h3>Your Hand</h3>
-            <div id="hand" class="hand">
-                </div>
-            <br>
-            <button onclick="drawCard()">Draw a Card</button>
-        </div>
+        <hr style="border: 0.5px solid #333; margin: 20px 0;">
+        <h3>Your Hand</h3>
+        <div id="hand"></div>
     </div>
 
     <script>
         const socket = io();
+        let isCzar = false;
 
-        function joinGame() {
+        function join() {
             const name = document.getElementById('username').value;
-            if (name.trim() !== "") {
-                socket.emit('join-game', name);
-                document.getElementById('lobby').style.display = 'none';
-                document.getElementById('game-table').style.display = 'block';
-            }
+            if(!name) return alert("Enter a name!");
+            socket.emit('join-game', name);
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
         }
 
-        function drawCard() {
-            socket.emit('draw-card');
-        }
+        socket.on('game-state', (data) => {
+            const me = data.players.find(p => p.id === socket.id);
+            if (!me) return;
+            isCzar = me.isCzar;
 
-        // Listen for cards coming from the server
-        socket.on('receive-card', (text) => {
+            // Update Scores
+            document.getElementById('scores').innerHTML = "<strong>Scores:</strong><br>" + 
+                data.players.map(p => `<div>${p.isCzar ? '👑 ' : ''}${p.username}: ${p.score}</div>`).join('');
+
+            // Update Black Card
+            document.getElementById('black-card-container').innerHTML = `<div class="card black-card">${data.blackCard}</div>`;
+            document.getElementById('czar-controls').style.display = isCzar ? 'block' : 'none';
+
+            // Update Hand (Refilled to 10)
             const handDiv = document.getElementById('hand');
-            const newCard = document.createElement('div');
-            newCard.className = 'card white-card';
-            newCard.innerText = text;
-            
-            // Optional: Click card to "play" it (we can add logic for this next)
-            newCard.onclick = () => {
-                alert("You played: " + text);
-                newCard.remove();
-            };
+            handDiv.innerHTML = me.hand.map(card => {
+                const safeCard = card.replace(/'/g, "\\'");
+                return `<div class="card white-card" onclick="playCard('${safeCard}')">${card}</div>`;
+            }).join('');
 
-            handDiv.appendChild(newCard);
+            // Update Table
+            const tableDiv = document.getElementById('table');
+            tableDiv.innerHTML = data.submissions.map(s => {
+                const clickAction = isCzar ? `onclick="socket.emit('pick-winner', '${s.playerId}')"` : "";
+                // If you are Czar, you see the text. If not, cards are hidden until round ends.
+                return `<div class="card white-card" ${clickAction}>${isCzar ? s.card : "???"}</div>`;
+            }).join('');
         });
 
-        // Update player list (for the lobby)
-        socket.on('update-player-list', (players) => {
-            console.log("Current players:", players);
+        function playCard(text) {
+            if (isCzar) return alert("The Czar can't play cards!");
+            socket.emit('play-card', text);
+        }
+
+        function adminReset() {
+            const pass = prompt("Enter Admin Password:");
+            if (pass) socket.emit('reset-game', pass);
+        }
+
+        socket.on('force-reload', () => {
+            alert("Admin has reset the game.");
+            location.reload();
         });
+
+        socket.on('error-msg', (msg) => alert(msg));
     </script>
 </body>
 </html>
