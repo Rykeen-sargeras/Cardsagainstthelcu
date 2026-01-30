@@ -10,10 +10,10 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 app.use(express.static('public'));
 
-// --- DECK MANAGEMENT ---
+// --- DECKS ---
 const rawWhite = fs.readFileSync('white_cards.txt', 'utf-8').split('\n').filter(l => l.trim() !== "");
 const rawBlack = fs.readFileSync('black_cards.txt', 'utf-8').split('\n').filter(l => l.trim() !== "");
-let whiteDeck = []; let blackDeck = []; let usedWhite = []; let usedBlack = [];
+let whiteDeck = []; let blackDeck = [];
 
 function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
@@ -24,16 +24,16 @@ function shuffle(array) {
 }
 
 function drawWhite() {
-    if (whiteDeck.length === 0) { whiteDeck = shuffle([...rawWhite]); usedWhite = []; }
+    if (whiteDeck.length === 0) whiteDeck = shuffle([...rawWhite]);
     return whiteDeck.pop();
 }
 
 function drawBlack() {
-    if (blackDeck.length === 0) { blackDeck = shuffle([...rawBlack]); usedBlack = []; }
+    if (blackDeck.length === 0) blackDeck = shuffle([...rawBlack]);
     return blackDeck.pop();
 }
 
-// --- GAME STATE ---
+// --- STATE ---
 let players = {};
 let czarIndex = 0;
 let currentBlackCard = "";
@@ -45,28 +45,35 @@ let debugModeActive = false;
 
 io.on('connection', (socket) => {
     socket.on('join-game', (username) => {
-        players[socket.id] = { id: socket.id, username: username || "Player", score: 0, hand: [], isCzar: false, hasSubmitted: false, isBot: false };
+        const cleanName = (username || "Player").replace(/<[^>]*>?/gm, '').substring(0, 15);
+        players[socket.id] = { id: socket.id, username: cleanName, score: 0, hand: [], isCzar: false, hasSubmitted: false, isBot: false };
         for(let i=0; i<10; i++) players[socket.id].hand.push(drawWhite());
         checkGameStart();
         updateAll();
     });
 
+    // ADMIN HANDLER
     socket.on('admin-action', (data) => {
-        if (data.pw !== 'Firesluts') return;
-        if (data.type === 'toggle-bot') { botModeActive = !botModeActive; if (botModeActive) addBot(); }
+        if (data.pw !== 'Firesluts') return; // Security Check
+        
+        if (data.type === 'toggle-bot') { 
+            botModeActive = !botModeActive; 
+            if (botModeActive) addBot(); 
+        }
         if (data.type === 'toggle-debug') debugModeActive = !debugModeActive;
         if (data.type === 'wipe-chat') io.emit('clear-chat-ui');
         if (data.type === 'reset') resetGame();
+        
         updateAll();
     });
 
     socket.on('send-chat', (msg) => {
         const p = players[socket.id];
-        if (p) io.emit('new-chat', { user: p.username, text: msg });
+        if (p) io.emit('new-chat', { user: p.username, text: msg.replace(/<[^>]*>?/gm, '') });
     });
 
     socket.on('czar-select-black', (card) => {
-        if (players[socket.id]?.isCzar) {
+        if (players[socket.id]?.isCzar && !currentBlackCard) {
             currentBlackCard = card;
             czarOptions = [];
             updateAll();
@@ -76,7 +83,7 @@ io.on('connection', (socket) => {
 
     socket.on('submit-card', (cardText) => {
         const p = players[socket.id];
-        if (!p || p.isCzar || p.hasSubmitted) return;
+        if (!p || p.isCzar || p.hasSubmitted || !currentBlackCard) return;
         processSubmission(socket.id, cardText);
     });
 
@@ -91,7 +98,16 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('disconnect', () => { delete players[socket.id]; updateAll(); });
+    socket.on('disconnect', () => {
+        const dId = socket.id;
+        setTimeout(() => {
+            if (!io.sockets.sockets.get(dId)) {
+                delete players[dId];
+                if (Object.keys(players).length < 3) gameStarted = false;
+                updateAll();
+            }
+        }, 3000);
+    });
 });
 
 function addBot() {
@@ -103,18 +119,23 @@ function addBot() {
 
 function processSubmission(id, cardText) {
     const p = players[id];
-    if(!p) return;
+    if(!p || p.hasSubmitted) return;
     submissions.push({ card: cardText, playerId: id, username: p.username });
     p.hand = p.hand.filter(c => c !== cardText);
     p.hand.push(drawWhite());
     p.hasSubmitted = true;
+    
+    // Shuffle submissions on table for anonymity
+    if (submissions.length >= (Object.keys(players).length - 1)) {
+        shuffle(submissions);
+    }
     updateAll();
 }
 
 function handleBotTurns() {
     Object.values(players).forEach(p => {
         if (p.isBot && !p.isCzar) {
-            setTimeout(() => processSubmission(p.id, p.hand[Math.floor(Math.random()*p.hand.length)]), 1000 + Math.random()*2000);
+            setTimeout(() => processSubmission(p.id, p.hand[Math.floor(Math.random()*p.hand.length)]), 2000 + Math.random()*2000);
         }
     });
 }
@@ -128,6 +149,7 @@ function startNewRound() {
         players[id].hasSubmitted = false;
     });
     czarOptions = [drawBlack(), drawBlack()];
+    
     const czar = Object.values(players).find(p => p.isCzar);
     if (czar?.isBot) {
         setTimeout(() => {
@@ -135,7 +157,7 @@ function startNewRound() {
             czarOptions = [];
             updateAll();
             handleBotTurns();
-        }, 2000);
+        }, 3000);
     }
 }
 
@@ -156,4 +178,4 @@ function updateAll() {
     });
 }
 
-server.listen(PORT, () => console.log('LCU Engine Online'));
+server.listen(PORT, () => console.log('Engine Live. Admin Access at bottom left.'));
