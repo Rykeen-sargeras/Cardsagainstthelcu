@@ -166,7 +166,7 @@ function addBot() {
 /* ----- Socket Events ----- */
 io.on("connection", (socket) => {
   console.log("🔌 Player connected:", socket.id);
-
+  
   socket.on("join", (name) => {
     if (!name || !name.trim()) return;
     
