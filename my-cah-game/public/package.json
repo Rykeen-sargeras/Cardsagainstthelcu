@@ -1,0 +1,14 @@
+{
+  "name": "cards-against-the-lcu",
+  "version": "2.1.0",
+  "description": "Lolcow Fire Presents Cards Against The LCU - Neon Edition",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "bad-words": "^3.0.4"
+  }
+}
