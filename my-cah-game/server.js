@@ -10,55 +10,103 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// 1. SERVING FRONTEND FILES
-// This makes everything in the 'public' folder (images, html) accessible
 app.use(express.static('public'));
 
-// 2. LOADING YOUR CARDS
-let whiteCards = [];
-let blackCards = [];
+// Load Cards from your .txt files
+let whiteCards = fs.readFileSync('white_cards.txt', 'utf-8').split('\n').filter(l => l.trim() !== "");
+let blackCards = fs.readFileSync('black_cards.txt', 'utf-8').split('\n').filter(l => l.trim() !== "");
 
-try {
-    // Reading the text files and splitting them by new line
-    whiteCards = fs.readFileSync('white_cards.txt', 'utf-8').split('\n').filter(line => line.trim() !== "");
-    blackCards = fs.readFileSync('black_cards.txt', 'utf-8').split('\n').filter(line => line.trim() !== "");
-    console.log(`Decks loaded: ${whiteCards.length} white cards, ${blackCards.length} black cards.`);
-} catch (err) {
-    console.error("Error reading card files. Make sure white_cards.txt and black_cards.txt exist!", err);
-}
-
-// 3. GAME STATE (A simple object to keep track of players)
 let players = {};
+let czarIndex = 0;
+let currentBlackCard = "";
+let submissions = []; 
 
 io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.id}`);
+    console.log('User connected:', socket.id);
 
-    // When a player joins the lobby
     socket.on('join-game', (username) => {
-        players[socket.id] = { username, score: 0, hand: [] };
-        
-        // Tell everyone a new player joined
-        io.emit('update-player-list', Object.values(players));
-        console.log(`${username} joined the lobby.`);
+        players[socket.id] = {
+            id: socket.id,
+            username: username || "Player",
+            score: 0,
+            hand: [],
+            isCzar: false
+        };
+
+        // Deal exactly 10 cards
+        for (let i = 0; i < 10; i++) {
+            players[socket.id].hand.push(drawCard(whiteCards));
+        }
+
+        if (Object.keys(players).length === 1) startNewRound();
+        updateAll();
     });
 
-    // When a player disconnects
-    socket.on('disconnect', () => {
-        if (players[socket.id]) {
-            console.log(`${players[socket.id].username} left.`);
-            delete players[socket.id];
-            io.emit('update-player-list', Object.values(players));
+    socket.on('play-card', (cardText) => {
+        const p = players[socket.id];
+        if (!p || p.isCzar) return;
+
+        // Play card and refill hand to exactly 10
+        submissions.push({ card: cardText, playerId: socket.id, username: p.username });
+        p.hand = p.hand.filter(c => c !== cardText);
+        p.hand.push(drawCard(whiteCards));
+
+        updateAll();
+    });
+
+    socket.on('pick-winner', (playerId) => {
+        if (players[socket.id]?.isCzar) {
+            if (players[playerId]) players[playerId].score++;
+            czarIndex++;
+            startNewRound();
+            updateAll();
         }
     });
 
-    // Simple test event: Draw a random card
-    socket.on('draw-card', () => {
-        const randomCard = whiteCards[Math.floor(Math.random() * whiteCards.length)];
-        socket.emit('receive-card', randomCard);
+    // PASSWORD PROTECTED RESET
+    socket.on('reset-game', (password) => {
+        if (password === 'Firesluts') { 
+            players = {};
+            submissions = [];
+            czarIndex = 0;
+            currentBlackCard = "";
+            io.emit('force-reload');
+        } else {
+            socket.emit('error-msg', "Wrong password, buddy.");
+        }
+    });
+
+    socket.on('disconnect', () => {
+        delete players[socket.id];
+        if (Object.keys(players).length > 0) {
+            // Re-assign Czar if the current one left
+            startNewRound();
+        }
+        updateAll();
     });
 });
 
-// 4. START THE SERVER
-server.listen(PORT, () => {
-    console.log(`Server is live at http://localhost:${PORT}`);
-});
+function drawCard(deck) {
+    return deck[Math.floor(Math.random() * deck.length)];
+}
+
+function startNewRound() {
+    submissions = [];
+    const ids = Object.keys(players);
+    if (ids.length === 0) return;
+    
+    currentBlackCard = drawCard(blackCards);
+    ids.forEach((id, index) => {
+        players[id].isCzar = (index === czarIndex % ids.length);
+    });
+}
+
+function updateAll() {
+    io.emit('game-state', {
+        players: Object.values(players),
+        blackCard: currentBlackCard,
+        submissions: submissions
+    });
+}
+
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
