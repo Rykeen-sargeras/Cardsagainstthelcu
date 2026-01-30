@@ -1,125 +1,202 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>XYZZY - Friends Against Humanity</title>
+    <title>FAH - Friends Against Humanity</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { font-family: 'Helvetica', sans-serif; background: #111; color: white; text-align: center; margin: 0; padding: 20px; }
-        .card { width: 150px; height: 210px; padding: 15px; border-radius: 12px; background-size: 100% 100%; display: inline-block; margin: 8px; text-align: left; font-weight: bold; color: black; cursor: pointer; border: 1px solid #333; vertical-align: top; overflow: hidden; line-height: 1.2; }
-        .black-card { background-image: url('blkcard.png'); color: white; cursor: default; }
-        .white-card { background-image: url('whitecard.png'); }
-        .score-board { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.9); padding: 15px; border: 1px solid #444; border-radius: 8px; z-index: 100; text-align: left; font-size: 14px; }
-        #login-box { margin-top: 15vh; border: 1px solid #333; display: inline-block; padding: 40px; border-radius: 15px; background: #1a1a1a; }
-        .status-msg { color: #ffcc00; margin: 15px; font-weight: bold; }
-        .admin-link { display: block; margin-top: 20px; color: #555; font-size: 12px; cursor: pointer; text-decoration: underline; }
-        hr { border: 0; height: 1px; background: #333; margin: 30px 0; }
-        .czar-banner { background: #00ff00; color: black; padding: 5px; font-weight: bold; margin-bottom: 15px; border-radius: 5px; }
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            80% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes pulseCyan {
+            0% { box-shadow: 0 0 5px cyan; }
+            50% { box-shadow: 0 0 20px cyan; }
+            100% { box-shadow: 0 0 5px cyan; }
+        }
+
+        @keyframes slideFade {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        body { font-family: 'Helvetica', sans-serif; background: #111; color: white; text-align: center; margin: 0; padding-bottom: 50px; overflow-x: hidden; }
+        
+        #czar-bar { 
+            background: #222; padding: 12px; font-weight: bold; 
+            border-bottom: 3px solid cyan; position: sticky; top: 0; 
+            z-index: 1000; animation: slideFade 0.5s ease-out;
+        }
+        
+        .card { 
+            width: 160px; height: 230px; padding: 15px; border-radius: 12px; 
+            display: inline-flex; align-items: flex-start; justify-content: flex-start; 
+            margin: 10px; font-weight: bold; font-size: 16px; text-align: left;
+            line-height: 1.2; border: 2px solid transparent; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            animation: popIn 0.4s ease-out;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .black-card { background-image: url('blkcard.png'); background-size: 100% 100%; color: white !important; }
+        .white-card { background-image: url('whitecard.png'); background-size: 100% 100%; color: black !important; cursor: pointer; }
+        
+        .white-card:hover { transform: translateY(-10px); }
+        .selected { animation: pulseCyan 1.5s infinite; border: 4px solid cyan !important; transform: translateY(-10px) scale(1.05); }
+        
+        .score-board { position: fixed; top: 70px; right: 15px; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 10px; font-size: 13px; text-align: left; border: 1px solid #444; backdrop-filter: blur(5px); }
+        
+        #waiting-for { background: #502; padding: 12px; margin: 15px auto; border-radius: 8px; font-size: 14px; width: fit-content; max-width: 80%; }
+        
+        .btn { padding: 12px 25px; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 8px; border: none; margin: 10px; transition: 0.2s; }
+        .confirm-btn { background: cyan; color: black; box-shadow: 0 0 15px cyan; }
+        .confirm-btn:hover { transform: scale(1.1); }
+        .join-btn { background: white; color: black; }
+        
+        #login-box { margin-top: 15vh; border: 1px solid #333; display: inline-block; padding: 50px; border-radius: 20px; background: #1a1a1a; }
+        
+        hr { border: 0; height: 1px; background: #333; margin: 40px; }
     </style>
 </head>
 <body>
 
+    <div id="czar-bar" style="display:none">👑 CURRENT CZAR: <span id="czar-name" style="color:cyan"></span></div>
+
     <div id="login-screen">
         <div id="login-box">
-            <h1>FAH Online</h1>
-            <div id="lobby-count" class="status-msg">Players in lobby: 0/3</div>
-            <input type="text" id="username" placeholder="Nickname" style="padding:10px; border-radius:5px; border:none; width: 200px;"><br><br>
-            <button onclick="join()" style="padding:10px 30px; border-radius:5px; border:none; background:white; color:black; font-weight:bold; cursor:pointer;">Enter Lobby</button>
-            <span class="admin-link" onclick="adminReset()">Admin Game Reset</span>
+            <h1>Friends Against Humanity</h1>
+            <input type="text" id="username" placeholder="Enter Nickname..." style="padding:15px; width: 220px; border-radius: 8px; border: none;"><br><br>
+            <button class="btn join-btn" onclick="join()">ENTER LOBBY</button>
+            <p onclick="adminReset()" style="color:#444; cursor:pointer; font-size:11px; margin-top: 20px;">Admin System Reset</p>
         </div>
     </div>
 
     <div id="game-screen" style="display:none">
-        <div class="score-board">
-            <div id="scores"></div>
-            <button onclick="adminReset()" style="margin-top:10px; background:none; color:red; border:1px solid red; cursor:pointer; width:100%; font-size:10px;">RESET ALL</button>
+        <div class="score-board" id="scores"></div>
+        
+        <div id="lobby-wait">
+            <h2 id="wait-count" style="margin-top: 100px;">Waiting for players to join...</h2>
         </div>
 
-        <div id="waiting-area" style="margin-top: 100px;">
-            <h2 id="wait-msg">Waiting for 3 players to start...</h2>
+        <div id="czar-choice-area" style="display:none">
+            <h3 style="color: cyan;">YOU ARE THE CZAR: Pick the Black Card</h3>
+            <div id="czar-options"></div>
         </div>
 
-        <div id="active-game" style="display:none">
-            <div id="is-czar-banner" class="czar-banner" style="display:none">YOU ARE THE CARD CZAR</div>
+        <div id="play-area" style="display:none">
+            <div id="waiting-for" style="display:none"></div>
             
-            <h2>Black Card</h2>
-            <div id="black-card-display"></div>
+            <div id="black-card-box"></div>
             
+            <div id="confirm-section" style="display:none; margin: 25px;">
+                <p>Ready to play: <strong id="selected-text" style="color:cyan"></strong></p>
+                <button class="btn confirm-btn" onclick="confirmSubmission()">CONFIRM SUBMISSION</button>
+            </div>
+
             <hr>
-            <h3>Table (Played Cards)</h3>
-            <div id="table-display"></div>
+            <h3>The Table</h3>
+            <div id="table"></div>
             
             <hr>
             <h3>Your Hand</h3>
-            <div id="hand-display"></div>
+            <div id="hand"></div>
         </div>
     </div>
 
     <script>
         const socket = io();
-        let myId = "";
+        let selectedCard = null;
+        let isCzar = false;
 
         function join() {
-            const name = document.getElementById('username').value;
-            if(!name) return alert("Please enter a nickname.");
-            socket.emit('join-game', name);
+            const n = document.getElementById('username').value;
+            if(!n) return alert("Enter a nickname first!");
+            socket.emit('join-game', n);
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('game-screen').style.display = 'block';
         }
 
         socket.on('game-state', (data) => {
-            myId = socket.id;
-            const me = data.players.find(p => p.id === myId);
-            
-            // Update Login Counter
-            document.getElementById('lobby-count').innerText = `Players in lobby: ${data.players.length}/3`;
+            const me = data.players.find(p => p.id === socket.id);
+            if(!me) return;
 
-            if (!me) return;
+            isCzar = me.isCzar;
+            document.getElementById('czar-bar').style.display = 'block';
+            document.getElementById('czar-name').innerText = data.czarName;
+            document.getElementById('scores').innerHTML = "<strong>Leaderboard</strong><br>" + 
+                data.players.map(p => `<div>${p.username}: ${p.score}</div>`).join('');
 
-            // Handle Lobby vs Game state
-            if (!data.gameStarted) {
-                document.getElementById('waiting-area').style.display = 'block';
-                document.getElementById('active-game').style.display = 'none';
-                document.getElementById('wait-msg').innerText = `Need ${Math.max(0, 3 - data.players.length)} more player(s) to start...`;
-                return;
+            // Waiting List
+            const waitingOn = data.players.filter(p => !p.isCzar && !data.submissions.find(s => s.playerId === p.id));
+            const waitBox = document.getElementById('waiting-for');
+            if(data.blackCard && waitingOn.length > 0) {
+                waitBox.style.display = 'block';
+                waitBox.innerText = "⏳ Waiting for: " + waitingOn.map(p => p.username).join(', ');
+            } else {
+                waitBox.style.display = 'none';
             }
 
-            document.getElementById('waiting-area').style.display = 'none';
-            document.getElementById('active-game').style.display = 'block';
+            if(!data.gameStarted) {
+                document.getElementById('lobby-wait').style.display = 'block';
+                document.getElementById('czar-choice-area').style.display = 'none';
+                document.getElementById('play-area').style.display = 'none';
+                document.getElementById('wait-count').innerText = `Waiting for ${Math.max(0, 3 - data.players.length)} more player(s)...`;
+                return;
+            }
+            document.getElementById('lobby-wait').style.display = 'none';
 
-            // Update Scores
-            document.getElementById('scores').innerHTML = "<strong>Scores</strong><br>" + 
-                data.players.map(p => `${p.isCzar ? '👑 ' : ''}${p.username}: ${p.score}`).join('<br>');
+            if(isCzar && !data.blackCard) {
+                document.getElementById('czar-choice-area').style.display = 'block';
+                document.getElementById('play-area').style.display = 'none';
+                document.getElementById('czar-options').innerHTML = data.czarOptions.map(c => 
+                    `<div class="card black-card" onclick="socket.emit('czar-select-black', '${c.replace(/'/g, "\\'")}')">${c}</div>`
+                ).join('');
+            } else if(data.blackCard) {
+                document.getElementById('czar-choice-area').style.display = 'none';
+                document.getElementById('play-area').style.display = 'block';
+                document.getElementById('black-card-box').innerHTML = `<div class="card black-card">${data.blackCard}</div>`;
+                
+                // Table: Only reveal to Czar when everyone has submitted
+                const allSubmitted = data.submissions.length >= (data.players.length - 1);
+                document.getElementById('table').innerHTML = data.submissions.map(s => {
+                    const action = (isCzar && allSubmitted) ? `onclick="socket.emit('pick-winner', '${s.playerId}')"` : "";
+                    const cardContent = (isCzar && allSubmitted) ? s.card : "???";
+                    return `<div class="card white-card" ${action}>${cardContent}</div>`;
+                }).join('') || "Waiting for players to submit their cards...";
 
-            // Czar UI
-            document.getElementById('is-czar-banner').style.display = me.isCzar ? 'block' : 'none';
-
-            // Black Card
-            document.getElementById('black-card-display').innerHTML = `<div class="card black-card">${data.blackCard}</div>`;
-
-            // Hand (10 cards)
-            const handHtml = me.hand.map(card => {
-                const safeCard = card.replace(/'/g, "\\'");
-                return `<div class="card white-card" onclick="socket.emit('play-card', '${safeCard}')">${card}</div>`;
-            }).join('');
-            document.getElementById('hand-display').innerHTML = handHtml;
-
-            // Table Submissions
-            const tableHtml = data.submissions.map(s => {
-                const action = me.isCzar ? `onclick="socket.emit('pick-winner', '${s.playerId}')"` : "";
-                // Czar sees text, others see hidden cards
-                const content = me.isCzar ? s.card : "???";
-                return `<div class="card white-card" ${action}>${content}</div>`;
-            }).join('');
-            document.getElementById('table-display').innerHTML = tableHtml || "<i>No cards played yet this round.</i>";
+                // Hand
+                if(!me.hasSubmitted && !isCzar) {
+                    document.getElementById('hand').innerHTML = me.hand.map((c, i) => 
+                        `<div class="card white-card" id="card-${i}" onclick="selectCard('${c.replace(/'/g, "\\'")}', 'card-${i}')">${c}</div>`
+                    ).join('');
+                } else {
+                    document.getElementById('hand').innerHTML = me.isCzar ? "<i>You are the Czar. Pick the winner after everyone plays!</i>" : "<i>Card confirmed! Waiting for other players...</i>";
+                    document.getElementById('confirm-section').style.display = 'none';
+                }
+            }
         });
+
+        function selectCard(text, id) {
+            selectedCard = text;
+            document.querySelectorAll('.white-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById(id).classList.add('selected');
+            document.getElementById('confirm-section').style.display = 'block';
+            document.getElementById('selected-text').innerText = text;
+        }
+
+        function confirmSubmission() {
+            if(selectedCard) {
+                socket.emit('submit-card', selectedCard);
+                selectedCard = null;
+            }
+        }
 
         function adminReset() {
             const p = prompt("Admin Password:");
             if(p) socket.emit('reset-game', p);
         }
 
-        socket.on('force-reload', () => location.reload());
-        socket.on('error-msg', (msg) => alert(msg));
+        socket.on('force-reload', (m) => { if(m) alert(m); location.reload(); });
     </script>
 </body>
 </html>
