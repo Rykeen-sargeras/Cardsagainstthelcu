@@ -1,16 +1,14 @@
 {
-  "name": "cards-against-lcu",
-  "version": "1.0.0",
-  "description": "Multiplayer Card Game Engine",
+  "name": "cards-against-the-lcu",
+  "version": "2.0.1",
+  "description": "Lolcow Fire Presents Cards Against The LCU (Render Ready)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.7.2"
-  },
-  "engines": {
-    "node": "16.x"
+    "socket.io": "^4.7.2",
+    "bad-words": "^3.0.4"
   }
 }
