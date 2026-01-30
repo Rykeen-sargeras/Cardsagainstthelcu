@@ -1,113 +1,158 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cards Against The LCU</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cards Against The LCU</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins+Rounded:wght@400;600&display=swap" rel="stylesheet">
 <script src="/socket.io/socket.io.js"></script>
 <style>
-body{margin:0;font-family:'Arial Black',sans-serif;background:#111;color:#fff;overflow:hidden;}
-.screen{display:none;height:100vh;align-items:center;justify-content:center;flex-direction:column;}
+:root{
+  --bg1:#0b0c10;--bg2:#16191f;
+  --cyan:#00fff7;--orange:#ff8a00;--glass:rgba(20,20,25,.8);
+}
+html,body{margin:0;height:100%;font-family:'Poppins Rounded',sans-serif;
+  background:linear-gradient(135deg,var(--bg1),var(--bg2));color:#fff;overflow:hidden;}
+button{font-family:'Poppins Rounded',sans-serif;border:none;border-radius:8px;
+  padding:10px 16px;font-weight:600;cursor:pointer;transition:.2s}
+button:hover{transform:scale(1.05);}
+.screen{display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;}
 #home{display:flex;}
-button{padding:12px;font-weight:bold;border:none;border-radius:6px;cursor:pointer;margin:5px;}
-#footer{position:absolute;bottom:10px;text-align:center;width:100%;color:orange;}
-#chat-box{background:url('cardsback.png');background-size:cover;overflow-y:auto;height:180px;padding:8px;}
-#admin-panel{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;border:3px solid cyan;padding:15px;z-index:10;border-radius:8px;}
+input,textarea{border:none;border-radius:6px;padding:10px;font-family:'Poppins Rounded',sans-serif;}
+
+#adminBtn{
+ position:fixed;bottom:15px;left:15px;z-index:10;
+ background:var(--cyan);color:#000;font-weight:700;border-radius:50px;
+ box-shadow:0 0 10px var(--cyan);
+}
+#adminPanel{
+ position:fixed;bottom:0;left:0;right:0;max-height:60vh;
+ background:var(--glass);backdrop-filter:blur(10px);
+ border-top:2px solid var(--cyan);display:none;flex-direction:column;
+ padding:20px;z-index:20;overflow-y:auto;
+}
+#adminPanel h3{margin-top:0;color:var(--cyan);}
+#chat{position:fixed;right:0;top:0;bottom:0;width:280px;background:var(--glass);
+  backdrop-filter:blur(10px); border-left:2px solid var(--cyan);}
+#chat-box{background:url('cardsback.png');background-size:cover;height:70%;overflow-y:auto;padding:8px;}
+#blackCard,.whiteCard{border-radius:10px;padding:20px;margin:10px;}
+#blackCard{background:#000;color:#fff;box-shadow:0 0 10px #000;}
+.whiteCard{background:#fff;color:#000;width:160px;min-height:180px;display:inline-block;
+  box-shadow:0 0 10px #111;transition:.25s;cursor:pointer;}
+.whiteCard:hover{transform:translateY(-8px)scale(1.05);box-shadow:0 0 12px var(--cyan);}
+#winnerOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);
+ color:var(--cyan);font-size:2em;align-items:center;justify-content:center;z-index:25;}
+footer{position:fixed;bottom:5px;width:100%;text-align:center;color:var(--orange);
+ font-size:.9em;}
 </style>
 </head>
 <body>
+
 <!-- HOME -->
 <div id="home" class="screen">
-  <h1 style="color:cyan;text-align:center;">Lolcow Fire Presents<br>Cards Against The LCU</h1>
-  <input id="name" placeholder="Username" style="padding:10px;text-align:center;">
-  <button onclick="join()">Join Lobby</button>
-  <div id="footer">Created and Coded by Rykeen</div>
+ <h1 style="color:var(--cyan);text-align:center;">Lolcow Fire Presents<br>Cards Against The LCU</h1>
+ <input id="name" placeholder="Username"><br>
+ <button style="background:var(--cyan);" onclick="join()">Join Lobby</button>
+ <footer>Created and Coded by Rykeen</footer>
 </div>
 
 <!-- LOBBY -->
 <div id="lobby" class="screen">
-  <h2>Lobby – Waiting for Players</h2>
-  <div id="playerList"></div>
-  <button id="readyBtn" onclick="ready()">✅ Ready</button>
+ <h2>Lobby – Waiting Room</h2>
+ <div id="players"></div>
+ <button id="readyBtn" style="background:var(--orange);" onclick="ready()">✅ Ready</button>
 </div>
 
 <!-- GAME -->
-<div id="game" class="screen" style="flex-direction:column;">
-  <div style="background:#000;padding:8px;">👑 CZAR: <span id="czarName"></span></div>
-  <div id="blackCard"></div>
-  <div id="table"></div>
-  <div id="hand"></div>
-  <div style="position:fixed;top:10px;right:10px;">
-    <button onclick="toggleChat()">💬</button>
-    <button onclick="openAdmin()">🛠</button>
-  </div>
-  <div id="chat" style="position:fixed;right:0;bottom:0;width:260px;background:#1a1a1a;">
-    <div id="chat-box"></div>
-    <input id="msg" placeholder="Message" style="width:70%;"><button onclick="sendMsg()">Send</button>
-  </div>
-  <audio id="music" controls style="position:fixed;bottom:5px;left:5px;width:200px;"></audio>
+<div id="game" class="screen">
+ <div style="padding:10px;background:#000;">👑 Czar: <span id="czarName">...</span></div>
+ <div id="blackCard"></div>
+ <div id="table" style="text-align:center;"></div>
+ <div id="hand" style="text-align:center;"></div>
+ <div id="chat">
+   <div id="chat-box"></div>
+   <input id="msg" placeholder="Message"><button onclick="sendMsg()">Send</button>
+ </div>
+ <audio id="ytAudio" controls style="position:fixed;bottom:5px;right:300px;width:240px;" ></audio>
 </div>
 
-<!-- ADMIN DASH -->
-<div id="admin-panel">
-  <h3 style="color:cyan;">Admin Dashboard</h3>
-  <button onclick="admin('reset')" style="background:orange;">Reset Game</button>
-  <input id="yt" placeholder="YouTube URL">
-  <button onclick="startMusic()">Play Music</button>
-  <div><button onclick="closeAdmin()">Close</button></div>
+<!-- Admin -->
+<button id="adminBtn" onclick="toggleAdmin()">🛠 Admin</button>
+<div id="adminPanel">
+ <h3>Admin Panel</h3>
+ <div id="adminPlayers"></div>
+ <div style="margin-top:10px;">
+   <input id="yt" placeholder="YouTube URL">
+   <button style="background:var(--cyan);" onclick="startMusic()">▶ Play Music</button>
+   <button style="background:var(--orange);" onclick="reset()">🔄 Reset Game</button>
+   <button style="background:#f33;color:#fff;" onclick="wipe()">🧹 Wipe Chat</button>
+   <button style="background:#555;color:#fff;" onclick="toggleAdmin()">Close</button>
+ </div>
 </div>
 
+<div id="winnerOverlay">Winner!</div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 <script>
-const socket=io();
-let myHand=[],isCzar=false;
-function show(s){document.querySelectorAll('.screen').forEach(x=>x.style.display='none');document.getElementById(s).style.display='flex';}
+const socket=io();let adminPw="",started=false,isCzar=false,hand=[];
+function show(x){document.querySelectorAll('.screen').forEach(s=>s.style.display='none');document.getElementById(x).style.display='flex';}
 function join(){const n=document.getElementById('name').value.trim();if(!n)return;socket.emit('join',n);show('lobby');}
 function ready(){socket.emit('ready-up');document.getElementById('readyBtn').disabled=true;}
+function sendMsg(){const i=document.getElementById('msg');if(i.value.trim()){socket.emit('chat',i.value);i.value='';}}
+function play(c){if(c==='__BLANK__'){const t=prompt('Write your custom card text');socket.emit('submit',c,t);}else socket.emit('submit',c);}
+function reset(){socket.emit('admin',{type:'reset',pw:adminPw});}
+function wipe(){document.getElementById('chat-box').innerHTML='';}
+function startMusic(){const url=document.getElementById('yt').value.trim();
+ socket.emit('admin',{type:'music-start',pw:adminPw,url});}
+function toggleAdmin(){
+ const p=document.getElementById('adminPanel');
+ if(p.style.display==='flex'||p.style.display==='block'){p.style.display='none';return;}
+ if(!adminPw){adminPw=prompt('Admin password?');socket.emit('admin',{type:'login',pw:adminPw});}
+ p.style.display='flex';
+}
+socket.on('a_fail',()=>alert("Wrong admin password"));
+socket.on('a_ok',()=>console.log("Admin Auth OK"));
 
+/* MAIN STATE */
 socket.on('state',d=>{
  if(!d.started){show('lobby');
-  document.getElementById('playerList').innerHTML=d.players.map(p=>`${p.username}${p.ready?' ✅':''}`).join('<br>');
-  return;}
- show('game');
+   document.getElementById('players').innerHTML=d.players.map(p=>`${p.username}${p.ready?' ✅':''}`).join('<br>');
+   const ap=document.getElementById('adminPlayers');
+   ap.innerHTML=d.players.map(p=>`${p.username} – Score: ${p.score}${p.isCzar?' 👑':''}`).join('<br>');
+   return;
+ }
+ show('game'); started=true;
  document.getElementById('czarName').textContent=d.czarName;
- const me=d.players.find(p=>p.id===socket.id);if(!me)return;
- isCzar=me.isCzar;myHand=me.hand;
- document.getElementById('blackCard').innerHTML=`<div style="background:#000;color:white;padding:15px;margin:10px;">${d.blackCard}</div>`;
- if(!isCzar&&!me.hasSubmitted){document.getElementById('hand').innerHTML=myHand.map(c=>`<button onclick="play('${c}')">${c==='__BLANK__'?'(Blank) Write One':c}</button>`).join('');}
- else document.getElementById('hand').innerHTML='';
+ const me=d.players.find(p=>p.id===socket.id); if(!me)return;
+ isCzar=me.isCzar; hand=me.hand;
  const allDone=d.submissions.length>=d.players.filter(p=>!p.isCzar).length;
- document.getElementById('table').innerHTML=d.submissions.map(s=>`<button ${isCzar&&allDone?`onclick="socket.emit('pick','${s.playerId}')"`:''}>${isCzar&&allDone?s.card:'???'}</button>`).join('');
+ document.getElementById('blackCard').innerHTML=`<div class="blackCard">${d.blackCard}</div>`;
+ if(!isCzar&&!me.hasSubmitted)
+   document.getElementById('hand').innerHTML=hand.map(c=>`<div class="whiteCard" onclick="play('${c}')">${c==='__BLANK__'?'(Blank)':c}</div>`).join('');
+ else document.getElementById('hand').innerHTML='';
+ document.getElementById('table').innerHTML=d.submissions.map(s=>`<div class="whiteCard"${isCzar&&allDone?` onclick="socket.emit('pick','${s.playerId}')"`:''}>${isCzar&&allDone?s.card:'???'}</div>`).join('');
 });
-
-function play(card){
- if(card==='__BLANK__'){const t=prompt('Type your custom card text');socket.emit('submit',card,t);}
- else socket.emit('submit',card);
-}
-function sendMsg(){const i=document.getElementById('msg');if(i.value.trim()){socket.emit('chat',i.value);i.value='';}}
-socket.on('chat',d=>{const c=document.getElementById('chat-box');c.innerHTML+=`<div><b style="color:cyan">${d.user}:</b> ${d.text}</div>`;c.scrollTop=c.scrollHeight;});
-socket.on('announce',u=>alert(`${u} won this round!`));
-socket.on('final-win',u=>alert(`${u} won the game! Restarting...`));
-
-function toggleChat(){const ch=document.getElementById('chat');ch.style.display=ch.style.display==='none'?'block':'none';}
-
-// admin + music
-let adminPw="";
-function openAdmin(){
- if(!adminPw){adminPw=prompt("Admin password?");socket.emit('admin',{type:'login',pw:adminPw});}
- document.getElementById('admin-panel').style.display='block';
-}
-function closeAdmin(){document.getElementById('admin-panel').style.display='none';}
-function admin(t){socket.emit('admin',{type:t,pw:adminPw});}
-function startMusic(){
- const url=document.getElementById('yt').value.trim();
- if(url)socket.emit('music',{url});
-}
-socket.on('music-play',d=>{
- const id=getVidId(d.url);if(!id)return;
- const audio=document.getElementById('music');
- audio.src=`https://www.youtube.com/embed/${id}?autoplay=1`;
- audio.play();
+socket.on('chat',d=>{
+ const c=document.getElementById('chat-box');
+ c.innerHTML+=`<div><b style="color:var(--cyan)">${d.user}:</b> ${d.text}</div>`;
+ c.scrollTop=c.scrollHeight;
 });
-function getVidId(u){const m=u.match(/v=([\w-]+)/);return m?m[1]:null;}
+socket.on('announce',u=>{overlay(`${u} won this round!`);});
+socket.on('final-win',u=>{overlay(`${u} WON THE GAME!`);doConfetti();});
+function overlay(t){const o=document.getElementById('winnerOverlay');o.textContent=t;o.style.display='flex';setTimeout(()=>o.style.display='none',4000);}
+function doConfetti(){confetti();}
+ 
+/* MUSIC EVENTS */
+socket.on('music-start',d=>{
+ const vid=getVid(d.url);if(!vid)return;
+ const a=document.getElementById('ytAudio');
+ a.src=`https://www.youtube.com/embed/${vid}?autoplay=1`;
+ setTimeout(()=>a.play().catch(()=>{}),300);
+});
+socket.on('music-skip',()=>{const a=document.getElementById('ytAudio');a.pause();a.src='';});
+document.getElementById('ytAudio').addEventListener('ended',()=>socket.emit('vote-skip'));
+document.getElementById('ytAudio').addEventListener('error',()=>socket.emit('vote-skip'));
+function getVid(u){const m=u.match(/v=([\w-]+)/);return m?m[1]:null;}
 </script>
 </body>
 </html>
