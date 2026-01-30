@@ -6,231 +6,110 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <style>
-        /* BASE STYLES */
         body { font-family: 'Arial Black', sans-serif; background: #111; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        /* LAYOUT */
-        #layout { display: flex; flex: 1; overflow: hidden; position: relative; }
-        #game-view { flex: 1; display: flex; flex-direction: column; background: #151515; position: relative; z-index: 1; }
+        #layout { display: flex; flex: 1; overflow: hidden; position: relative; z-index: 1; }
+        #game-view { flex: 1; display: flex; flex-direction: column; background: #151515; position: relative; }
         #sidebar { width: 300px; background: #1a1a1a; border-left: 2px solid #333; display: flex; flex-direction: column; z-index: 2; }
-        
-        /* ADMIN CONTROLS (THE FIX) */
-        #admin-trigger {
-            position: fixed; 
-            bottom: 5px; 
-            left: 5px; 
-            font-size: 12px; 
-            color: #444; 
-            background: rgba(0,0,0,0.5); 
-            padding: 5px 10px; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            z-index: 99999; /* Always on top */
-            user-select: none;
-        }
-        #admin-trigger:hover { color: cyan; background: black; }
 
-        #admin-panel { 
-            position: fixed; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%); 
-            background: #222; 
-            border: 3px solid cyan; 
-            padding: 20px; 
-            z-index: 100000; 
-            display: none; 
-            box-shadow: 0 0 50px black;
-            text-align: center;
-            min-width: 250px;
-        }
+        /* RED ADMIN BUTTON */
+        #admin-trigger { position: fixed; bottom: 20px; left: 20px; background: red; color: white; padding: 10px 15px; font-weight: bold; border: 2px solid white; border-radius: 8px; cursor: pointer; z-index: 999999; text-transform: uppercase; }
+        #admin-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; border: 3px solid cyan; padding: 20px; z-index: 1000000; display: none; text-align: center; min-width: 250px; }
 
-        #debug-box { 
-            position: fixed; top: 10px; right: 320px; 
-            background: rgba(0,0,0,0.8); color: #0f0; 
-            padding: 10px; border: 1px solid #0f0; 
-            font-family: monospace; font-size: 10px; 
-            display: none; z-index: 100; pointer-events: none;
-        }
+        /* LOGIN */
+        #login { position: fixed; inset: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100000; }
 
-        /* GAME COMPONENTS */
-        .card { 
-            flex: 0 0 auto; width: 140px; height: 190px; padding: 12px; margin: 5px; border-radius: 10px; 
-            text-align: left; font-size: 14px; border: 4px solid transparent; background-size: 100% 100%;
-            white-space: normal; overflow: hidden; display: flex; align-items: flex-start;
-        }
+        /* CARDS */
+        .card { flex: 0 0 auto; width: 140px; height: 190px; padding: 12px; margin: 5px; border-radius: 10px; text-align: left; font-size: 14px; border: 4px solid transparent; background-size: 100% 100%; color: black; }
         .black { background-image: url('blkcard.png'); color: white; }
-        .white { background-image: url('whitecard.png'); color: black; cursor: pointer; }
-        .selected { border-color: cyan !important; box-shadow: 0 0 15px cyan; transform: translateY(-10px); }
+        .white { background-image: url('whitecard.png'); cursor: pointer; }
+        .selected { border-color: cyan !important; transform: translateY(-10px); }
 
-        #hand-wrapper { background: #222; border-top: 2px solid #444; padding: 10px; z-index: 10; }
-        #hand { display: flex; overflow-x: auto; white-space: nowrap; padding-bottom: 10px; -webkit-overflow-scrolling: touch; }
+        #hand-wrapper { background: #222; border-top: 2px solid #444; padding: 10px; }
+        #hand { display: flex; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
         
-        .btn { padding: 12px 20px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; margin: 5px; width: 100%; }
+        .btn { padding: 12px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; width: 100%; }
         .confirm-btn { background: cyan; color: black; width: 90%; max-width: 300px; margin: 10px auto; display: none; }
-        
-        #winner-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9000; align-items: center; justify-content: center; font-size: 2.5em; color: cyan; text-align: center; }
-        #login { position:fixed; inset:0; background:#111; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:100000; }
+        #winner-overlay { display: none; position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.95); align-items: center; justify-content: center; color: cyan; font-size: 2em; }
     </style>
 </head>
 <body>
-
     <div id="winner-overlay"></div>
-    <div id="debug-box"></div>
-
-    <div id="admin-trigger" onclick="openAdmin()">⚙ ADMIN PANEL</div>
-
+    <div id="admin-trigger" onclick="tryAdmin()">🛠 ADMIN</div>
     <div id="admin-panel">
-        <h3 style="margin-top:0; color:cyan;">ADMIN CONTROLS</h3>
-        <button class="btn" onclick="admin('toggle-bot')" style="background:#444; color:white;">🤖 Toggle Bots</button>
-        <button class="btn" onclick="admin('toggle-debug')" style="background:#444; color:white;">📟 Toggle Debug</button>
+        <h3 style="color:cyan;">ADMIN CONTROLS</h3>
+        <button class="btn" onclick="admin('toggle-bot')">🤖 Toggle Bots</button>
+        <button class="btn" onclick="admin('toggle-debug')">📟 Toggle Debug</button>
         <button class="btn" onclick="admin('wipe-chat')" style="background:red; color:white;">❌ Wipe Chat</button>
-        <button class="btn" onclick="admin('reset')" style="background:orange; color:black;">🔄 Reset Game</button>
-        <hr style="border-color:#444">
-        <button class="btn" onclick="document.getElementById('admin-panel').style.display='none'" style="background:white; color:black;">Close</button>
+        <button class="btn" onclick="admin('reset')" style="background:orange;">🔄 Reset Game</button>
+        <button class="btn" onclick="document.getElementById('admin-panel').style.display='none'">Close</button>
     </div>
 
     <div id="login">
         <img src="cardsback.png" style="width:200px; margin-bottom:20px;">
-        <input type="text" id="nick" placeholder="Enter Username..." style="padding:15px; width:250px;"><br>
-        <button class="btn" onclick="join()" style="background:cyan; width:250px;">JOIN GAME</button>
+        <input type="text" id="nick" placeholder="Username" style="padding:15px; width:250px; text-align:center;"><br>
+        <button class="btn" onclick="join()" style="background:cyan;">JOIN GAME</button>
     </div>
 
     <div id="layout">
-        
         <div id="game-view">
             <div style="background:#000; padding:10px; border-bottom:1px solid cyan; text-align:center;">
                 👑 CZAR: <span id="czar-name" style="color:cyan">...</span>
             </div>
-            
             <div id="play-area" style="flex:1; overflow-y:auto; padding:10px; text-align:center;">
                 <div id="black-area"></div>
                 <div id="mat"></div>
             </div>
-
             <button id="sub-btn" class="confirm-btn" onclick="confirmChoice()">CONFIRM SELECTION</button>
-
-            <div id="hand-wrapper">
-                <div id="hand"></div>
-            </div>
+            <div id="hand-wrapper"><div id="hand"></div></div>
         </div>
-
         <div id="sidebar">
-            <img src="cardsback.png" style="width:100%; height:120px; object-fit:cover; border-bottom:2px solid cyan;">
-            <div id="chat-area" style="flex:1; overflow-y:auto; padding:10px; font-size:14px; color:#ccc;"></div>
-            <div style="padding:10px; display:flex; border-top:1px solid #333; background:#222;">
-                <input type="text" id="chat-msg" style="flex:1; padding:10px;" placeholder="Message...">
-                <button onclick="sendChat()" class="btn" style="padding:5px 15px; background:cyan; width:auto; margin:0;">></button>
+            <div id="chat-area" style="flex:1; overflow-y:auto; padding:10px; font-size:14px;"></div>
+            <div style="padding:10px; display:flex; background:#222;">
+                <input type="text" id="chat-msg" style="flex:1; padding:10px;">
+                <button onclick="sendChat()" class="btn" style="width:auto; background:cyan;">></button>
             </div>
         </div>
     </div>
 
     <script>
         const socket = io();
-        let currentHand = []; let selIdx = -1; let amICzar = false; let czarOpts = [];
+        let currentHand = []; let selIdx = -1; let amICzar = false; let adminPw = "";
 
-        // ADMIN LOGIC
-        function openAdmin() { 
-            const pw = prompt("Enter Admin Password:"); 
-            if(pw === 'Firesluts') document.getElementById('admin-panel').style.display='block';
-            else alert("Access Denied");
-        }
-        function admin(type) { 
-            socket.emit('admin-action', { type, pw: 'Firesluts' }); 
-        }
+        function tryAdmin() { if(!adminPw) adminPw = prompt("Pass?"); if(adminPw) socket.emit('admin-action', { type: 'login', pw: adminPw }); }
+        function admin(type) { socket.emit('admin-action', { type, pw: adminPw }); }
+        socket.on('admin-success', () => { document.getElementById('admin-panel').style.display='block'; });
+        socket.on('admin-fail', () => { alert("Wrong Password"); adminPw = ""; });
 
-        // GAME LOGIC
-        function join() {
-            const n = document.getElementById('nick').value;
-            if(n) { socket.emit('join-game', n); document.getElementById('login').style.display='none'; }
-        }
+        function join() { const n = document.getElementById('nick').value; if(n) { socket.emit('join-game', n); document.getElementById('login').style.display='none'; } }
 
         socket.on('game-state', (data) => {
             const me = data.players.find(p => p.id === socket.id);
-            const dbx = document.getElementById('debug-box');
-            
-            // Debug Panel Update
-            dbx.style.display = data.debugMode ? 'block' : 'none';
-            if(data.debugMode) {
-                dbx.innerHTML = `STATUS: ${data.gameStarted ? 'Playing' : 'Lobby'}<br>
-                                 BOTS: ${data.botMode ? 'ON' : 'OFF'}<br>
-                                 SUBS: ${data.submissions.length} / ${data.players.length-1}`;
-            }
-
             if(!me) return;
             amICzar = me.isCzar;
             currentHand = me.hand;
-            czarOpts = data.czarOptions;
             document.getElementById('czar-name').innerText = data.czarName;
 
-            if(!data.gameStarted) {
-                document.getElementById('black-area').innerHTML = "<h2>Waiting for players (Need 3)...</h2>";
-                return;
-            }
+            if(!data.gameStarted) { document.getElementById('black-area').innerHTML = "<h2>Wait for 3 players...</h2>"; return; }
 
-            // Czar Logic
-            if(amICzar && !data.blackCard) {
-                document.getElementById('black-area').innerHTML = `<h3>Choose Topic:</h3>` + 
-                    czarOpts.map((c, i) => `<div class="card black" onclick="socket.emit('czar-select-black', '${c.replace(/'/g, "\\'")}')">${c}</div>`).join('');
-                document.getElementById('hand-wrapper').style.display = 'none';
-            } 
-            // Player Logic
-            else if(data.blackCard) {
-                document.getElementById('black-area').innerHTML = `<div class="card black">${data.blackCard}</div>`;
-                document.getElementById('hand-wrapper').style.display = (amICzar || me.hasSubmitted) ? 'none' : 'block';
-                
-                const allDone = data.submissions.length >= (data.players.length - 1);
-                
-                document.getElementById('mat').innerHTML = `<h4>The Table</h4>` + data.submissions.map(s => {
-                    return `<div class="card white" ${ (amICzar && allDone) ? `onclick="pickWinner('${s.playerId}')"` : ""}>${(amICzar && allDone) ? s.card : "???"}</div>`;
-                }).join('');
+            document.getElementById('black-area').innerHTML = `<div class="card black">${data.blackCard}</div>`;
+            document.getElementById('hand-wrapper').style.display = (amICzar || me.hasSubmitted) ? 'none' : 'block';
+            
+            const allDone = data.submissions.length >= (data.players.length - 1);
+            document.getElementById('mat').innerHTML = `<h4>Table</h4>` + data.submissions.map(s => {
+                return `<div class="card white" ${ (amICzar && allDone) ? `onclick="socket.emit('pick-winner', '${s.playerId}')"` : ""}>${(amICzar && allDone) ? s.card : "???"}</div>`;
+            }).join('');
 
-                if(!amICzar && !me.hasSubmitted) {
-                    document.getElementById('hand').innerHTML = currentHand.map((c, i) => `<div class="card white ${selIdx===i?'selected':''}" onclick="sel(${i})">${c}</div>`).join('');
-                } else {
-                    document.getElementById('hand').innerHTML = ""; // Clear hand when waiting
-                }
-            }
-            adjustCardText();
+            if(!amICzar && !me.hasSubmitted) {
+                document.getElementById('hand').innerHTML = currentHand.map((c, i) => `<div class="card white ${selIdx===i?'selected':''}" onclick="sel(${i})">${c}</div>`).join('');
+            } else { document.getElementById('hand').innerHTML = ""; }
         });
 
         function sel(i) { selIdx = i; document.getElementById('sub-btn').style.display = 'block'; }
-        
-        function confirmChoice() {
-            if(selIdx > -1) {
-                socket.emit('submit-card', currentHand[selIdx]);
-                selIdx = -1;
-                document.getElementById('sub-btn').style.display = 'none';
-            }
-        }
-
-        function pickWinner(id) { socket.emit('pick-winner', id); }
-
-        // Font Autosizing
-        function adjustCardText() {
-            document.querySelectorAll('.card').forEach(c => {
-                const len = c.innerText.length;
-                if(len > 100) c.style.fontSize = "10px";
-                else if(len > 60) c.style.fontSize = "11px";
-                else c.style.fontSize = "13px";
-            });
-        }
-
-        // Chat
+        function confirmChoice() { if(selIdx > -1) { socket.emit('submit-card', currentHand[selIdx]); selIdx = -1; document.getElementById('sub-btn').style.display = 'none'; } }
         function sendChat() { const i = document.getElementById('chat-msg'); if(i.value) { socket.emit('send-chat', i.value); i.value=''; } }
-        socket.on('new-chat', d => { const c = document.getElementById('chat-area'); c.innerHTML += `<div style="margin-bottom:5px;"><b>${d.user}:</b> ${d.text}</div>`; c.scrollTop = c.scrollHeight; });
-        socket.on('clear-chat-ui', () => { document.getElementById('chat-area').innerHTML = '<i style="color:red">Chat History Wiped.</i>'; });
-        
-        socket.on('round-winner', d => {
-            const o = document.getElementById('winner-overlay');
-            o.innerText = d.name.toUpperCase() + " WON!";
-            o.style.display = 'flex';
-            if(d.id === socket.id) confetti({ particleCount: 200, spread: 100 });
-            setTimeout(() => o.style.display = 'none', 3000);
-        });
-
+        socket.on('new-chat', d => { const c = document.getElementById('chat-area'); c.innerHTML += `<div><b>${d.user}:</b> ${d.text}</div>`; c.scrollTop = c.scrollHeight; });
+        socket.on('round-winner', d => { const o = document.getElementById('winner-overlay'); o.innerText = d.name.toUpperCase() + " WON!"; o.style.display = 'flex'; setTimeout(() => o.style.display='none', 3000); });
         socket.on('force-reload', () => location.reload());
-        document.getElementById('chat-msg').onkeydown = e => { if(e.key==='Enter') sendChat(); };
     </script>
 </body>
 </html>
