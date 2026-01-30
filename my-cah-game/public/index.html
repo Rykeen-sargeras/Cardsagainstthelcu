@@ -3,185 +3,147 @@
 <head>
     <title>CardsAgainstTheLCU</title>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <style>
-        @keyframes popIn {
-            0% { transform: scale(0.5); opacity: 0; }
-            80% { transform: scale(1.05); opacity: 1; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        @keyframes pulseCyan {
-            0% { box-shadow: 0 0 5px cyan; }
-            50% { box-shadow: 0 0 20px cyan; }
-            100% { box-shadow: 0 0 5px cyan; }
-        }
-
-        @keyframes slideFade {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        body { font-family: 'Helvetica', sans-serif; background: #111; color: white; text-align: center; margin: 0; padding-bottom: 50px; overflow-x: hidden; }
+        @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes pulseCyan { 0% { box-shadow: 0 0 5px cyan; } 50% { box-shadow: 0 0 20px cyan; } 100% { box-shadow: 0 0 5px cyan; } }
         
-        #czar-bar { 
-            background: #222; padding: 12px; font-weight: bold; 
-            border-bottom: 3px solid cyan; position: sticky; top: 0; 
-            z-index: 1000; animation: slideFade 0.5s ease-out;
-        }
-
-        /* Banner styling */
-        .banner {
-            width: 100%;
-            max-width: 500px;
-            height: auto;
-            margin-bottom: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
+        body { font-family: 'Helvetica', sans-serif; background: #111; color: white; text-align: center; margin: 0; overflow-x: hidden; display: flex; flex-direction: column; height: 100vh; }
+        
+        #czar-bar { background: #222; padding: 12px; font-weight: bold; border-bottom: 3px solid cyan; z-index: 1000; flex-shrink: 0; }
+        
+        #main-container { display: flex; flex: 1; overflow: hidden; }
+        #game-area { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
+        
+        /* Chat Sidebar */
+        #chat-sidebar { width: 280px; background: #1a1a1a; border-left: 1px solid #333; display: flex; flex-direction: column; }
+        #chat-messages { flex: 1; overflow-y: auto; padding: 10px; text-align: left; font-size: 14px; }
+        #chat-input-area { padding: 10px; border-top: 1px solid #333; display: flex; }
+        #chat-msg { flex: 1; padding: 8px; border-radius: 4px; border: none; }
         
         .card { 
-            width: 160px; height: 230px; padding: 15px; border-radius: 12px; 
-            display: inline-flex; align-items: flex-start; justify-content: flex-start; 
-            margin: 10px; font-weight: bold; font-size: 16px; text-align: left;
-            line-height: 1.2; border: 2px solid transparent; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            animation: popIn 0.4s ease-out;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            width: 150px; height: 210px; padding: 15px; border-radius: 12px; display: inline-flex; 
+            margin: 8px; font-weight: bold; font-size: 16px; text-align: left; line-height: 1.2; 
+            border: 2px solid transparent; animation: popIn 0.3s ease-out; background-size: 100% 100%;
+            word-wrap: break-word; overflow: hidden; align-items: flex-start;
+        }
+        .black-card { background-image: url('blkcard.png'); color: white !important; cursor: pointer; }
+        .white-card { background-image: url('whitecard.png'); color: black !important; cursor: pointer; transition: 0.2s; }
+        .white-card:hover { transform: translateY(-5px); }
+        .selected { animation: pulseCyan 1.5s infinite; border: 3px solid cyan !important; }
+        
+        .score-board { background: rgba(0,0,0,0.5); padding: 10px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #444; display: inline-block; }
+        
+        #winner-overlay {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: cyan; color: black; padding: 40px; border-radius: 20px;
+            font-size: 32px; font-weight: bold; z-index: 2000; box-shadow: 0 0 50px cyan;
         }
 
-        .black-card { background-image: url('blkcard.png'); background-size: 100% 100%; color: white !important; }
-        .white-card { background-image: url('whitecard.png'); background-size: 100% 100%; color: black !important; cursor: pointer; }
+        .btn { padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 6px; border: none; margin: 5px; }
+        .confirm-btn { background: cyan; color: black; }
+        .join-btn { background: white; color: black; font-size: 18px; padding: 15px 30px; }
         
-        .white-card:hover { transform: translateY(-10px); }
-        .selected { animation: pulseCyan 1.5s infinite; border: 4px solid cyan !important; transform: translateY(-10px) scale(1.05); }
-        
-        .score-board { position: fixed; top: 70px; right: 15px; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 10px; font-size: 13px; text-align: left; border: 1px solid #444; backdrop-filter: blur(5px); }
-        
-        #waiting-for { background: #502; padding: 12px; margin: 15px auto; border-radius: 8px; font-size: 14px; width: fit-content; max-width: 80%; }
-        
-        .btn { padding: 12px 25px; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 8px; border: none; margin: 10px; transition: 0.2s; }
-        .confirm-btn { background: cyan; color: black; box-shadow: 0 0 15px cyan; }
-        .confirm-btn:hover { transform: scale(1.1); }
-        .join-btn { background: white; color: black; }
-        
-        #login-box { margin-top: 10vh; border: 1px solid #333; display: inline-block; padding: 40px; border-radius: 20px; background: #1a1a1a; max-width: 90%; }
-        
-        hr { border: 0; height: 1px; background: #333; margin: 40px; }
+        #login-screen { position: absolute; inset: 0; background: #111; z-index: 3000; display: flex; align-items: center; justify-content: center; }
+        .banner { width: 300px; border-radius: 10px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
 
-    <div id="czar-bar" style="display:none">👑 CURRENT CZAR: <span id="czar-name" style="color:cyan"></span></div>
+    <div id="winner-overlay"></div>
+    <div id="czar-bar" style="display:none">👑 CZAR: <span id="czar-name" style="color:cyan"></span></div>
 
     <div id="login-screen">
-        <div id="login-box">
-            <img src="cardsback.png" alt="Cards Against The LCU" class="banner">
+        <div>
+            <img src="cardsback.png" class="banner"><br>
             <h1>CardsAgainstTheLCU</h1>
-            <input type="text" id="username" placeholder="Enter Nickname..." style="padding:15px; width: 220px; border-radius: 8px; border: none; font-size: 16px;"><br><br>
-            <button class="btn join-btn" onclick="join()">ENTER LOBBY</button>
-            <p onclick="adminReset()" style="color:#444; cursor:pointer; font-size:11px; margin-top: 20px;">Admin System Reset</p>
+            <input type="text" id="username" placeholder="Nickname..." style="padding:15px; width: 250px; border-radius: 8px; border: none;"><br><br>
+            <button class="btn join-btn" onclick="join()">START PLAYING</button>
         </div>
     </div>
 
-    <div id="game-screen" style="display:none">
-        <div class="score-board" id="scores"></div>
-        
-        <div id="lobby-wait">
-            <h2 id="wait-count" style="margin-top: 100px;">Waiting for players to join...</h2>
-        </div>
-
-        <div id="czar-choice-area" style="display:none">
-            <h3 style="color: cyan;">YOU ARE THE CZAR: Pick the Black Card</h3>
-            <div id="czar-options"></div>
-        </div>
-
-        <div id="play-area" style="display:none">
-            <div id="waiting-for" style="display:none"></div>
+    <div id="main-container">
+        <div id="game-area">
+            <div id="scores" class="score-board"></div>
             
-            <div id="black-card-box"></div>
-            
-            <div id="confirm-section" style="display:none; margin: 25px;">
-                <p>Ready to play: <strong id="selected-text" style="color:cyan"></strong></p>
-                <button class="btn confirm-btn" onclick="confirmSubmission()">CONFIRM SUBMISSION</button>
+            <div id="lobby-wait" style="margin-top:50px;"><h2>Waiting for more players...</h2></div>
+
+            <div id="czar-choice-area" style="display:none">
+                <h3>CZAR: Choose the Topic</h3>
+                <div id="czar-options"></div>
             </div>
 
-            <hr>
-            <h3>The Table</h3>
-            <div id="table"></div>
-            
-            <hr>
-            <h3>Your Hand</h3>
-            <div id="hand"></div>
+            <div id="play-area" style="display:none">
+                <div id="black-card-box"></div>
+                <div id="confirm-section" style="display:none; margin: 20px;">
+                    <button class="btn confirm-btn" onclick="confirmSubmission()">CONFIRM SUBMISSION</button>
+                </div>
+                <hr>
+                <div id="table"></div>
+                <hr>
+                <div id="hand"></div>
+            </div>
+        </div>
+
+        <div id="chat-sidebar">
+            <div id="chat-messages"></div>
+            <div id="chat-input-area">
+                <input type="text" id="chat-msg" placeholder="Type a roast...">
+                <button class="btn confirm-btn" onclick="sendMessage()" style="padding: 5px 10px; margin: 0 0 0 5px;">></button>
+            </div>
         </div>
     </div>
 
     <script>
         const socket = io();
         let selectedCard = null;
-        let isCzar = false;
+        let myId = "";
+        let czarOptionsLocal = [];
 
         function join() {
             const n = document.getElementById('username').value;
-            if(!n) return alert("Enter a nickname first!");
+            if(!n) return;
             socket.emit('join-game', n);
             document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('game-screen').style.display = 'block';
         }
 
         socket.on('game-state', (data) => {
-            const me = data.players.find(p => p.id === socket.id);
+            myId = socket.id;
+            const me = data.players.find(p => p.id === myId);
             if(!me) return;
 
-            isCzar = me.isCzar;
             document.getElementById('czar-bar').style.display = 'block';
             document.getElementById('czar-name').innerText = data.czarName;
-            document.getElementById('scores').innerHTML = "<strong>Leaderboard</strong><br>" + 
-                data.players.map(p => `<div>${p.username}: ${p.score}</div>`).join('');
-
-            // Waiting List
-            const waitingOn = data.players.filter(p => !p.isCzar && !data.submissions.find(s => s.playerId === p.id));
-            const waitBox = document.getElementById('waiting-for');
-            if(data.blackCard && waitingOn.length > 0) {
-                waitBox.style.display = 'block';
-                waitBox.innerText = "⏳ Waiting for: " + waitingOn.map(p => p.username).join(', ');
-            } else {
-                waitBox.style.display = 'none';
-            }
+            document.getElementById('scores').innerHTML = data.players.map(p => `<strong>${p.username}:</strong> ${p.score}`).join(' | ');
 
             if(!data.gameStarted) {
                 document.getElementById('lobby-wait').style.display = 'block';
-                document.getElementById('czar-choice-area').style.display = 'none';
                 document.getElementById('play-area').style.display = 'none';
-                document.getElementById('wait-count').innerText = `Waiting for ${Math.max(0, 3 - data.players.length)} more player(s)...`;
                 return;
             }
             document.getElementById('lobby-wait').style.display = 'none';
 
-            if(isCzar && !data.blackCard) {
+            if(me.isCzar && !data.blackCard) {
                 document.getElementById('czar-choice-area').style.display = 'block';
                 document.getElementById('play-area').style.display = 'none';
-                document.getElementById('czar-options').innerHTML = data.czarOptions.map(c => 
-                    `<div class="card black-card" onclick="socket.emit('czar-select-black', '${c.replace(/'/g, "\\'")}')">${c}</div>`
-                ).join('');
+                czarOptionsLocal = data.czarOptions;
+                document.getElementById('czar-options').innerHTML = data.czarOptions.map((c, i) => 
+                    `<div class="card black-card" onclick="socket.emit('czar-select-black', czarOptionsLocal[${i}])">${c}</div>`).join('');
             } else if(data.blackCard) {
                 document.getElementById('czar-choice-area').style.display = 'none';
                 document.getElementById('play-area').style.display = 'block';
-                document.getElementById('black-card-box').innerHTML = `<div class="card black-card">${data.blackCard}</div>`;
+                document.getElementById('black-card-box').innerHTML = `<div class="card black-card" style="cursor:default">${data.blackCard}</div>`;
                 
-                // Table: Only reveal to Czar when everyone has submitted
-                const allSubmitted = data.submissions.length >= (data.players.length - 1);
+                const allIn = data.submissions.length >= (data.players.length - 1);
                 document.getElementById('table').innerHTML = data.submissions.map(s => {
-                    const action = (isCzar && allSubmitted) ? `onclick="socket.emit('pick-winner', '${s.playerId}')"` : "";
-                    const cardContent = (isCzar && allSubmitted) ? s.card : "???";
-                    return `<div class="card white-card" ${action}>${cardContent}</div>`;
-                }).join('') || "Waiting for players to submit their cards...";
+                    const action = (me.isCzar && allIn) ? `onclick="socket.emit('pick-winner', '${s.playerId}')"` : "";
+                    return `<div class="card white-card" ${action}>${(me.isCzar && allIn) ? s.card : "???"}</div>`;
+                }).join('') || "Waiting for submissions...";
 
-                // Hand
-                if(!me.hasSubmitted && !isCzar) {
-                    document.getElementById('hand').innerHTML = me.hand.map((c, i) => 
-                        `<div class="card white-card" id="card-${i}" onclick="selectCard('${c.replace(/'/g, "\\'")}', 'card-${i}')">${c}</div>`
-                    ).join('');
+                if(!me.hasSubmitted && !me.isCzar) {
+                    document.getElementById('hand').innerHTML = me.hand.map((c, i) => `<div class="card white-card" id="c-${i}" onclick="selectCard('${c.replace(/'/g, "\\'")}', 'c-${i}')">${c}</div>`).join('');
                 } else {
-                    document.getElementById('hand').innerHTML = me.isCzar ? "<i>You are the Czar. Pick the winner after everyone plays!</i>" : "<i>Card confirmed! Waiting for other players...</i>";
+                    document.getElementById('hand').innerHTML = me.isCzar ? "<i>Wait for others...</i>" : "<i>Submitted!</i>";
                     document.getElementById('confirm-section').style.display = 'none';
                 }
             }
@@ -192,22 +154,41 @@
             document.querySelectorAll('.white-card').forEach(c => c.classList.remove('selected'));
             document.getElementById(id).classList.add('selected');
             document.getElementById('confirm-section').style.display = 'block';
-            document.getElementById('selected-text').innerText = text;
         }
 
         function confirmSubmission() {
-            if(selectedCard) {
-                socket.emit('submit-card', selectedCard);
-                selectedCard = null;
-            }
+            if(selectedCard) { socket.emit('submit-card', selectedCard); selectedCard = null; }
         }
 
-        function adminReset() {
-            const p = prompt("Admin Password:");
-            if(p) socket.emit('reset-game', p);
+        function sendMessage() {
+            const input = document.getElementById('chat-msg');
+            if(input.value) { socket.emit('send-chat', input.value); input.value = ''; }
         }
+
+        socket.on('new-chat', (data) => {
+            const box = document.getElementById('chat-messages');
+            box.innerHTML += `<div><strong>${data.user}:</strong> ${data.text}</div>`;
+            box.scrollTop = box.scrollHeight;
+        });
+
+        socket.on('round-winner', (data) => {
+            const overlay = document.getElementById('winner-overlay');
+            overlay.innerText = data.name + " WON THE ROUND!";
+            overlay.style.display = 'block';
+            if(data.id === socket.id) {
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            }
+            setTimeout(() => { overlay.style.display = 'none'; }, 3800);
+        });
+
+        socket.on('game-over', (winner) => {
+            document.body.innerHTML = `<h1 style="margin-top:20vh; color:cyan;">🏆 ${winner} IS THE GRAND CHAMPION! 🏆</h1><p>Restarting in 8 seconds...</p>`;
+            confetti({ particleCount: 500, spread: 160 });
+        });
 
         socket.on('force-reload', (m) => { if(m) alert(m); location.reload(); });
+        
+        document.getElementById('chat-msg').addEventListener('keypress', (e) => { if(e.key === 'Enter') sendMessage(); });
     </script>
 </body>
 </html>
