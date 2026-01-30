@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>FAH - Friends Against Humanity</title>
+    <title>CardsAgainstTheLCU</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         @keyframes popIn {
@@ -28,6 +28,16 @@
             border-bottom: 3px solid cyan; position: sticky; top: 0; 
             z-index: 1000; animation: slideFade 0.5s ease-out;
         }
+
+        /* Banner styling */
+        .banner {
+            width: 100%;
+            max-width: 500px;
+            height: auto;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
         
         .card { 
             width: 160px; height: 230px; padding: 15px; border-radius: 12px; 
@@ -53,7 +63,7 @@
         .confirm-btn:hover { transform: scale(1.1); }
         .join-btn { background: white; color: black; }
         
-        #login-box { margin-top: 15vh; border: 1px solid #333; display: inline-block; padding: 50px; border-radius: 20px; background: #1a1a1a; }
+        #login-box { margin-top: 10vh; border: 1px solid #333; display: inline-block; padding: 40px; border-radius: 20px; background: #1a1a1a; max-width: 90%; }
         
         hr { border: 0; height: 1px; background: #333; margin: 40px; }
     </style>
@@ -64,8 +74,9 @@
 
     <div id="login-screen">
         <div id="login-box">
-            <h1>Friends Against Humanity</h1>
-            <input type="text" id="username" placeholder="Enter Nickname..." style="padding:15px; width: 220px; border-radius: 8px; border: none;"><br><br>
+            <img src="cardsback.png" alt="Cards Against The LCU" class="banner">
+            <h1>CardsAgainstTheLCU</h1>
+            <input type="text" id="username" placeholder="Enter Nickname..." style="padding:15px; width: 220px; border-radius: 8px; border: none; font-size: 16px;"><br><br>
             <button class="btn join-btn" onclick="join()">ENTER LOBBY</button>
             <p onclick="adminReset()" style="color:#444; cursor:pointer; font-size:11px; margin-top: 20px;">Admin System Reset</p>
         </div>
