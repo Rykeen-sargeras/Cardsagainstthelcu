@@ -1,163 +1,181 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const fs = require('fs');
+/**
+ * Render‑ready backend for Cards Against The LCU
+ * ----------------------------------------------
+ *  • Uses env.ADMIN_PASS if present (falls back to Firesluts)
+ *  • Minor keep‑alive interval to prevent Render auto‑sleep during play
+ *  • No file writes – all state is memory‑only
+ */
+
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const fs = require("fs");
+const Filter = require("bad-words");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
 const PORT = process.env.PORT || 3000;
-app.use(express.static('public'));
 
-// --- ROBUST DECK MANAGEMENT ---
-let rawWhite = ["Blank White Card"];
-let rawBlack = ["Blank Black Card"];
+app.use(express.static("public"));
 
+const ADMIN_PASS = process.env.ADMIN_PASS || "Firesluts";
+const WIN_POINTS = 10;
+
+let rawWhite = ["Blank White"];
+let rawBlack = ["Blank Black"];
 try {
-    if(fs.existsSync('white_cards.txt')) rawWhite = fs.readFileSync('white_cards.txt', 'utf-8').split('\n').filter(l => l.trim() !== "");
-    if(fs.existsSync('black_cards.txt')) rawBlack = fs.readFileSync('black_cards.txt', 'utf-8').split('\n').filter(l => l.trim() !== "");
-} catch (e) { console.log("File error - using defaults"); }
+  if (fs.existsSync("white_cards.txt"))
+    rawWhite = fs.readFileSync("white_cards.txt", "utf8").split("\n").filter(Boolean);
+  if (fs.existsSync("black_cards.txt"))
+    rawBlack = fs.readFileSync("black_cards.txt", "utf8").split("\n").filter(Boolean);
+} catch {
+  console.log("Card files missing, using defaults.");
+}
 
-let whiteDeck = []; 
+let whiteDeck = [];
 let blackDeck = [];
+const shuffle = (a) => {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+const drawWhite = () => {
+  if (!whiteDeck.length) whiteDeck = shuffle([...rawWhite]);
+  const card = whiteDeck.pop();
+  return Math.random() < 0.1 ? "__BLANK__" : card;
+};
+const drawBlack = () => {
+  if (!blackDeck.length) blackDeck = shuffle([...rawBlack]);
+  return blackDeck.pop();
+};
 
-function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
-
-function drawWhite() {
-    if (whiteDeck.length === 0) whiteDeck = shuffle([...rawWhite]);
-    return whiteDeck.pop();
-}
-
-function drawBlack() {
-    if (blackDeck.length === 0) {
-        console.log("Black deck empty! Reshuffling used cards...");
-        blackDeck = shuffle([...rawBlack]);
-    }
-    return blackDeck.pop();
-}
-
-// --- GAME STATE ---
+// state
 let players = {};
-let czarIndex = 0;
-let currentBlackCard = "";
 let submissions = [];
-let gameStarted = false;
-let botModeActive = false;
-let debugModeActive = false;
-const ADMIN_PASSWORD = "Firesluts";
+let currentBlack = "";
+let czarIndex = 0;
+let started = false;
+let readyCount = 0;
 
-io.on('connection', (socket) => {
-    socket.on('join-game', (username) => {
-        const cleanName = (username || "Player").replace(/<[^>]*>?/gm, '').substring(0, 15);
-        players[socket.id] = { id: socket.id, username: cleanName, score: 0, hand: [], isCzar: false, hasSubmitted: false, isBot: false };
-        for(let i=0; i<10; i++) players[socket.id].hand.push(drawWhite());
-        checkGameStart();
-        updateAll();
-    });
+const filter = new Filter();
+filter.removeWords("hell", "damn");
 
-    socket.on('admin-action', (data) => {
-        if (data.pw !== ADMIN_PASSWORD) return socket.emit('admin-fail');
-        if (data.type === 'login') socket.emit('admin-success');
-        if (data.type === 'toggle-bot') { botModeActive = !botModeActive; if (botModeActive) addBot(); }
-        if (data.type === 'toggle-debug') debugModeActive = !debugModeActive;
-        if (data.type === 'wipe-chat') io.emit('clear-chat-ui');
-        if (data.type === 'reset') resetGame();
-        updateAll();
-    });
+// util
+function broadcast() {
+  io.emit("state", {
+    players: Object.values(players),
+    blackCard: currentBlack,
+    submissions,
+    started,
+    czarName: Object.values(players).find((p) => p.isCzar)?.username || "...",
+    readyCount
+  });
+}
+function nextRound() {
+  submissions = [];
+  currentBlack = drawBlack();
+  const ids = Object.keys(players);
+  if (ids.length < 3) return (started = false), broadcast();
+  czarIndex = (czarIndex + 1) % ids.length;
+  ids.forEach((id, i) => {
+    players[id].isCzar = i === czarIndex;
+    players[id].hasSubmitted = false;
+  });
+  broadcast();
+}
+function resetGame() {
+  players = {};
+  submissions = [];
+  currentBlack = "";
+  czarIndex = 0;
+  started = false;
+  readyCount = 0;
+  broadcast();
+}
 
-    socket.on('submit-card', (cardText) => {
-        const p = players[socket.id];
-        if (!p || p.isCzar || p.hasSubmitted || !currentBlackCard) return;
-        processSubmission(socket.id, cardText);
-    });
+// socket io
+io.on("connection", (socket) => {
+  socket.on("join", (name) => {
+    if (!name) return;
+    players[socket.id] = {
+      id: socket.id,
+      username: name.substring(0, 15),
+      hand: Array.from({ length: 10 }, drawWhite),
+      score: 0,
+      hasSubmitted: false,
+      isCzar: false,
+      ready: false
+    };
+    broadcast();
+  });
 
-    socket.on('pick-winner', (winnerId) => {
-        const p = players[socket.id];
-        if (p && p.isCzar && submissions.length >= (Object.keys(players).length - 1)) {
-            const winner = players[winnerId];
-            if (winner) {
-                winner.score++;
-                io.emit('round-winner', { name: winner.username, id: winner.id });
-                setTimeout(() => { rotateCzar(); startNewRound(); updateAll(); }, 4000);
-            }
-        }
-    });
+  socket.on("ready-up", () => {
+    const p = players[socket.id];
+    if (!p || p.ready) return;
+    p.ready = true;
+    readyCount++;
+    const humans = Object.values(players);
+    if (readyCount >= humans.length && humans.length >= 3) {
+      started = true;
+      czarIndex = 0;
+      nextRound();
+    }
+    broadcast();
+  });
 
-    socket.on('send-chat', (msg) => {
-        const p = players[socket.id];
-        if (p) io.emit('new-chat', { user: p.username, text: msg.replace(/<[^>]*>?/gm, '') });
-    });
+  socket.on("submit", (card, custom) => {
+    const p = players[socket.id];
+    if (!p || p.isCzar || p.hasSubmitted) return;
+    let playText = card;
+    if (card === "__BLANK__" && custom)
+      playText = filter.clean(custom.slice(0, 140));
+    submissions.push({ card: playText, playerId: p.id });
+    p.hasSubmitted = true;
+    if (submissions.length >= Object.values(players).filter(x => !x.isCzar).length)
+      submissions = shuffle(submissions);
+    broadcast();
+  });
 
-    socket.on('disconnect', () => {
-        setTimeout(() => {
-            if (!io.sockets.sockets.get(socket.id)) {
-                if (players[socket.id]) {
-                    const wasCzar = players[socket.id].isCzar;
-                    delete players[socket.id];
-                    if (wasCzar && Object.keys(players).length >= 3) { rotateCzar(); startNewRound(); }
-                    updateAll();
-                }
-            }
-        }, 2000);
-    });
+  socket.on("pick", (pid) => {
+    const cz = Object.values(players).find((p) => p.isCzar && p.id === socket.id);
+    const winner = players[pid];
+    if (!cz || !winner) return;
+    winner.score++;
+    io.emit("announce", winner.username);
+    if (winner.score >= WIN_POINTS) {
+      io.emit("final-win", winner.username);
+      setTimeout(resetGame, 15000);
+      return;
+    }
+    setTimeout(nextRound, 4000);
+  });
+
+  socket.on("chat", (msg) => {
+    const p = players[socket.id];
+    if (!p) return;
+    const safe = filter.clean(msg.slice(0, 200));
+    io.emit("chat", { user: p.username, text: safe });
+  });
+
+  socket.on("admin", (d) => {
+    if (d.pw !== ADMIN_PASS) return socket.emit("a_fail");
+    if (d.type === "login") socket.emit("a_ok");
+    if (d.type === "reset") resetGame();
+    broadcast();
+  });
+
+  socket.on("music", (data) => io.emit("music-play", data));
+
+  socket.on("disconnect", () => {
+    if (!players[socket.id]) return;
+    delete players[socket.id];
+    broadcast();
+  });
 });
 
-function processSubmission(id, cardText) {
-    const p = players[id];
-    submissions.push({ card: cardText, playerId: id, username: p.username });
-    p.hand = p.hand.filter(c => c !== cardText);
-    p.hand.push(drawWhite());
-    p.hasSubmitted = true;
-    if (submissions.length >= (Object.keys(players).length - 1)) shuffle(submissions);
-    updateAll();
-}
-
-function rotateCzar() {
-    const ids = Object.keys(players);
-    if(ids.length > 0) czarIndex = (czarIndex + 1) % ids.length;
-}
-
-function startNewRound() {
-    submissions = [];
-    currentBlackCard = drawBlack();
-    const ids = Object.keys(players);
-    if(ids.length < 3) { gameStarted = false; return; }
-    ids.forEach((id, i) => {
-        players[id].isCzar = (i === czarIndex);
-        players[id].hasSubmitted = false;
-    });
-    if (botModeActive) handleBotTurns();
-}
-
-function handleBotTurns() {
-    Object.values(players).forEach(p => {
-        if (p.isBot && !p.isCzar) {
-            setTimeout(() => { if(!p.hasSubmitted) processSubmission(p.id, p.hand[Math.floor(Math.random()*p.hand.length)]); }, 2000 + Math.random()*2000);
-        }
-    });
-}
-
-function checkGameStart() { if (!gameStarted && Object.keys(players).length >= 3) { gameStarted = true; startNewRound(); } }
-
-function resetGame() { players = {}; submissions = []; czarIndex = 0; currentBlackCard = ""; gameStarted = false; io.emit('force-reload'); }
-
-function updateAll() {
-    io.emit('game-state', {
-        players: Object.values(players),
-        blackCard: currentBlackCard,
-        submissions,
-        gameStarted,
-        botMode: botModeActive,
-        debugMode: debugModeActive,
-        czarName: Object.values(players).find(p => p.isCzar)?.username || "..."
-    });
-}
-
-server.listen(PORT, () => console.log(`Server Online - Admin password: ${ADMIN_PASSWORD}`));
+server.listen(PORT, () => console.log("Server live on", PORT));
+// keep-alive pings every 5 min (helps Render keep process active while players exist)
+setInterval(() => console.log("⏱ keep-alive ping"), 300000);
