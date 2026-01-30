@@ -1,0 +1,15 @@
+# Node dependencies - This is the big one!
+node_modules/
+package-lock.json
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables / Secrets
+.env
+
+# Operating System junk
+.DS_Store
+Thumbs.db
